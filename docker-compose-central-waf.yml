@@ -1,7 +1,4 @@
-version: '3.8'
-
 services:
-  # OpenAppSec Agent (Central WebUI Mode)
   open-appsec-agent:
     image: ghcr.io/openappsec/agent:latest
     container_name: open-appsec-agent
@@ -24,14 +21,52 @@ services:
       timeout: 10s
       retries: 3
 
-  # OpenAppSec NGINX
+  mongodb:
+    image: mongo
+    container_name: mongodb
+    restart: always
+    volumes:
+      - ./fake-store-api/mongo_data:/data/db
+    networks:
+      - appnet
+
+  fake-store-api:
+    build:
+      context: ./fake-store-api
+    container_name: fake-store-api
+    env_file:
+      - ./fake-store-api/.env
+    expose:
+      - "8765"
+    depends_on:
+      mongodb:
+        condition: service_started
+    networks:
+      - appnet
+    restart: unless-stopped
+
+  cve-nextjs-app:
+    build:
+      context: ./CVE-2025-55182
+    container_name: cve-nextjs-app
+    expose:
+      - "3000"
+    networks:
+      - appnet
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+
   open-appsec-nginx:
     image: ghcr.io/openappsec/nginx-attachment:latest
     container_name: open-appsec-nginx
     depends_on:
       open-appsec-agent:
         condition: service_healthy
-      app:
+      fake-store-api:
+        condition: service_started
+      cve-nextjs-app:
         condition: service_started
     ports:
       - "80:80"
@@ -42,35 +77,6 @@ services:
       - appsec-data:/etc/cp/data:ro
     ipc: host
     restart: unless-stopped
-    networks:
-      - appnet
-
-  # Your Application
-  app:
-    build: .
-    container_name: fake-store-api
-    env_file:
-      - .env
-    expose:
-      - "${PORT}"
-    depends_on:
-      - db
-    networks:
-      - appnet
-    restart: unless-stopped
-
-  # MongoDB Database
-  db:
-    image: mongo
-    container_name: mongodb
-    restart: always
-    volumes:
-      - ./mongo_data:/data/db
-    env_file:
-      - .env
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${DB_USERNAME}
-      MONGO_INITDB_ROOT_PASSWORD: ${DB_PASSWORD}
     networks:
       - appnet
 

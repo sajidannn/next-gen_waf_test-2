@@ -1,0 +1,66 @@
+services:
+  # Fake Store API Application
+  fake-store-api:
+    build:
+      context: ./fake-store-api
+      dockerfile: Dockerfile
+    container_name: fake-store-api
+    env_file:
+      - ./fake-store-api/.env
+    expose:
+      - "8765"
+    depends_on:
+      - mongodb
+    networks:
+      - appnet
+    restart: unless-stopped
+    environment:
+      - PORT=8765
+
+  # CVE Next.js Application
+  cve-nextjs-app:
+    build:
+      context: ./CVE-2025-55182
+      dockerfile: Dockerfile
+    container_name: cve-nextjs-app
+    expose:
+      - "3000"
+    networks:
+      - appnet
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+
+  # MongoDB Database (No Auth untuk testing)
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - appnet
+
+  # NGINX Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: nginx-proxy
+    depends_on:
+      - fake-store-api
+      - cve-nextjs-app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - appnet
+    restart: unless-stopped
+
+networks:
+  appnet:
+    driver: bridge
+
+volumes:
+  mongo_data:
