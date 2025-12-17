@@ -1,7 +1,4 @@
-version: '3.8'
-
 services:
-  # OpenAppSec Agent (Standalone Mode)
   open-appsec-agent:
     image: ghcr.io/openappsec/agent:latest
     container_name: open-appsec-agent
@@ -23,27 +20,38 @@ services:
       timeout: 10s
       retries: 3
 
-  # Fake Store API Application
+  mongodb:
+    image: mongo:6
+    container_name: mongodb
+    restart: always
+    env_file:
+      - .env
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${DB_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - ./fake-store-api/mongo_data:/data/db
+    networks:
+      - appnet
+
   fake-store-api:
     build:
       context: ./fake-store-api
-      dockerfile: Dockerfile
     container_name: fake-store-api
     env_file:
       - ./fake-store-api/.env
     expose:
       - "8765"
     depends_on:
-      - mongodb
+      mongodb:
+        condition: service_started
     networks:
       - appnet
     restart: unless-stopped
 
-  # CVE Next.js Application
   cve-nextjs-app:
     build:
       context: ./CVE-2025-55182
-      dockerfile: Dockerfile
     container_name: cve-nextjs-app
     expose:
       - "3000"
@@ -54,22 +62,6 @@ services:
       - NODE_ENV=production
       - PORT=3000
 
-  # MongoDB Database
-  mongodb:
-    image: mongo
-    container_name: mongodb
-    restart: always
-    volumes:
-      - mongo_data:/data/db
-    env_file:
-      - ./fake-store-api/.env
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${DB_USERNAME}
-      MONGO_INITDB_ROOT_PASSWORD: ${DB_PASSWORD}
-    networks:
-      - appnet
-
-  # OpenAppSec NGINX (Reverse Proxy)
   open-appsec-nginx:
     image: ghcr.io/openappsec/nginx-attachment:latest
     container_name: open-appsec-nginx
