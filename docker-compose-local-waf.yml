@@ -1,0 +1,105 @@
+version: '3.8'
+
+services:
+  # OpenAppSec Agent (Standalone Mode)
+  open-appsec-agent:
+    image: ghcr.io/openappsec/agent:latest
+    container_name: open-appsec-agent
+    environment:
+      - registered_server=NGINX Server
+    volumes:
+      - ./local_policy:/ext/appsec
+      - appsec-conf:/etc/cp/conf
+      - appsec-data:/etc/cp/data
+      - appsec-logs:/var/log/nano_agent
+    command: /cp-nano-agent --standalone
+    ipc: host
+    restart: unless-stopped
+    networks:
+      - appnet
+    healthcheck:
+      test: ["CMD", "pgrep", "-x", "cp-nano-agent"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Fake Store API Application
+  fake-store-api:
+    build:
+      context: ./fake-store-api
+      dockerfile: Dockerfile
+    container_name: fake-store-api
+    env_file:
+      - ./fake-store-api/.env
+    expose:
+      - "8765"
+    depends_on:
+      - mongodb
+    networks:
+      - appnet
+    restart: unless-stopped
+    environment:
+      - PORT=8765
+
+  # CVE Next.js Application
+  cve-nextjs-app:
+    build:
+      context: ./CVE-2025-55182
+      dockerfile: Dockerfile
+    container_name: cve-nextjs-app
+    expose:
+      - "3000"
+    networks:
+      - appnet
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+
+  # MongoDB Database
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    env_file:
+      - ./fake-store-api/.env
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${DB_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${DB_PASSWORD}
+    networks:
+      - appnet
+
+  # OpenAppSec NGINX (Reverse Proxy)
+  open-appsec-nginx:
+    image: ghcr.io/openappsec/nginx-attachment:latest
+    container_name: open-appsec-nginx
+    depends_on:
+      open-appsec-agent:
+        condition: service_healthy
+      fake-store-api:
+        condition: service_started
+      cve-nextjs-app:
+        condition: service_started
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - appsec-conf:/etc/cp/conf:ro
+      - appsec-data:/etc/cp/data:ro
+    ipc: host
+    restart: unless-stopped
+    networks:
+      - appnet
+
+networks:
+  appnet:
+    driver: bridge
+
+volumes:
+  appsec-conf:
+  appsec-data:
+  appsec-logs:
+  mongo_data:

@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  # OpenAppSec Agent (Central WebUI Mode)
+  open-appsec-agent:
+    image: ghcr.io/openappsec/agent:latest
+    container_name: open-appsec-agent
+    environment:
+      - registered_server=NGINX Server
+      - AGENT_TOKEN=${APPSEC_AGENT_TOKEN}
+      - user_email=${APPSEC_USER_EMAIL}
+    volumes:
+      - appsec-conf:/etc/cp/conf
+      - appsec-data:/etc/cp/data
+      - appsec-logs:/var/log/nano_agent
+    command: /cp-nano-agent
+    ipc: host
+    restart: unless-stopped
+    networks:
+      - appnet
+    healthcheck:
+      test: ["CMD", "pgrep", "-x", "cp-nano-agent"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # OpenAppSec NGINX
+  open-appsec-nginx:
+    image: ghcr.io/openappsec/nginx-attachment:latest
+    container_name: open-appsec-nginx
+    depends_on:
+      open-appsec-agent:
+        condition: service_healthy
+      app:
+        condition: service_started
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - appsec-conf:/etc/cp/conf:ro
+      - appsec-data:/etc/cp/data:ro
+    ipc: host
+    restart: unless-stopped
+    networks:
+      - appnet
+
+  # Your Application
+  app:
+    build: .
+    container_name: fake-store-api
+    env_file:
+      - .env
+    expose:
+      - "${PORT}"
+    depends_on:
+      - db
+    networks:
+      - appnet
+    restart: unless-stopped
+
+  # MongoDB Database
+  db:
+    image: mongo
+    container_name: mongodb
+    restart: always
+    volumes:
+      - ./mongo_data:/data/db
+    env_file:
+      - .env
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${DB_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${DB_PASSWORD}
+    networks:
+      - appnet
+
+networks:
+  appnet:
+    driver: bridge
+
+volumes:
+  appsec-conf:
+  appsec-data:
+  appsec-logs:
