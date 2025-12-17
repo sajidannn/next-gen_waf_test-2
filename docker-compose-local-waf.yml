@@ -38,8 +38,6 @@ services:
     networks:
       - appnet
     restart: unless-stopped
-    environment:
-      - PORT=8765
 
   # CVE Next.js Application
   cve-nextjs-app:
@@ -58,9 +56,9 @@ services:
 
   # MongoDB Database
   mongodb:
-    image: mongo:latest
+    image: mongo
     container_name: mongodb
-    restart: unless-stopped
+    restart: always
     volumes:
       - mongo_data:/data/db
     env_file:
@@ -102,4 +100,3 @@ volumes:
   appsec-conf:
   appsec-data:
   appsec-logs:
-  mongo_data:
