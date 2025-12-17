@@ -21,14 +21,9 @@ services:
       retries: 3
 
   mongodb:
-    image: mongo:6
+    image: mongo
     container_name: mongodb
     restart: always
-    env_file:
-      - .env
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${DB_USERNAME}
-      MONGO_INITDB_ROOT_PASSWORD: ${DB_PASSWORD}
     volumes:
       - ./fake-store-api/mongo_data:/data/db
     networks:
